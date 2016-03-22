@@ -1,24 +1,49 @@
-//a simple OpenCL kernel which adds two vectors A and B together into a third vector C
 __kernel void add(__global const int* A, __global const int* B, __global int* C) {
 	int id = get_global_id(0);
 	C[id] = A[id] + B[id];
 }
 
-//a simple smoothing kernel averaging values in a local window (radius 1)
-__kernel void avg_filter(__global const int* A, __global int* B) {
+__kernel void equal(__global const float* A, __global float* B) {
 	int id = get_global_id(0);
-	B[id] = (A[id - 1] + A[id] + A[id + 1])/3;
+	B[id] = A[id];
 }
 
-//a simple 2D kernel
-__kernel void add2D(__global const int* A, __global const int* B, __global int* C) {
-	int x = get_global_id(0);
-	int y = get_global_id(1);
-	int width = get_global_size(0);
-	int height = get_global_size(1);
-	int id = x + y*width;
+__kernel void reduce_min(__global const double* A, __global double* B) {
+	int id = get_global_id(0);
+	int N = get_global_size(0);
+	
+	B[id] = A[id];
 
-	printf("id = %d x = %d y = %d w = %d h = %d\n", id, x, y, width, height);
+	barrier(CLK_GLOBAL_MEM_FENCE);
 
-	C[id]= A[id]+ B[id];
+	for (int i = 1; i < N; i *= 2) { //i is a stride
+		if (!(id % (i * 2)) && ((id + i) < N))
+		{
+			if(B[id] > B[id + i])
+			{
+				B[id] = B[id + i];
+			}
+		}
+		barrier(CLK_GLOBAL_MEM_FENCE);
+	}
+}
+
+__kernel void reduce_max(__global const double* A, __global double* B) {
+	int id = get_global_id(0);
+	int N = get_global_size(0);
+	
+	B[id] = A[id];
+
+	barrier(CLK_GLOBAL_MEM_FENCE);
+
+	for (int i = 1; i < N; i *= 2) { //i is a stride
+		if (!(id % (i * 2)) && ((id + i) < N))
+		{
+			if(B[id] < B[id + i])
+			{
+				B[id] = B[id + i];
+			}
+		}
+		barrier(CLK_GLOBAL_MEM_FENCE);
+	}
 }

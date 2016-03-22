@@ -5,11 +5,9 @@
 #include <vector>
 #include <string>
 #include "Utils.h"
-#ifdef __APPLE__
-#include <OpenCL/cl.hpp>
-#else
+
 #include <CL/cl.hpp>
-#endif
+
 
 int main()
 {//Program entry point
@@ -19,13 +17,17 @@ int main()
 	int platform_id = 0;
 	int device_id = 0;
 
+	//Result variables
+	double min = 0, max = 0, mean = 0;
+	int index_min = 0, index_max = 0, index_mean = 0;
+
 	//Vectors to hold data from all weather stations
 	vector<string>stationName;
 	vector<int>year;
 	vector<int>month;
 	vector<int>day;
 	vector<int>time;
-	vector<float>temperature;
+	vector<double>temperature;
 
 	std::cout << "Enter relative filepath: ";
 	std::cin >> filename;
@@ -65,7 +67,7 @@ int main()
 			count++;
 			break;
 		case 5:
-			temperature.push_back(stof(data));
+			temperature.push_back(stod(data));
 			count = 0;
 			break;
 		}
@@ -96,28 +98,73 @@ int main()
 	}
 
 	size_t vector_elements = temperature.size();//number of elements
-	size_t vector_size = temperature.size()*sizeof(float);//size in bytes
+	size_t vector_size = temperature.size()*sizeof(double);//size in bytes
 
     //Output vector
-	std::vector<float> result(vector_elements);
+	std::vector<double> result_min(vector_elements);
+	std::vector<double> result_max(vector_elements);
+	std::vector<double> result_mean(vector_elements);
 
 	//Device buffers
 	cl::Buffer buffer_temperature(context, CL_MEM_READ_WRITE, vector_size);
 	cl::Buffer buffer_result(context, CL_MEM_READ_WRITE, vector_size);
 
-	//Copy arrays A and B to device memory
+	/* - Max -*/
+
+	//Copy arrays to device memory
 	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
-	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result[0]);
+	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
 
-	//Setup and execute the kernel(i.e.device code)
-	cl::Kernel kernel_equal = cl::Kernel(program, "equal");
-	kernel_equal.setArg(0, buffer_temperature);
-	kernel_equal.setArg(1, buffer_result);
+	//Setup and execute the kernel
+	cl::Kernel kernel_max = cl::Kernel(program, "reduce_max");
+	kernel_max.setArg(0, buffer_temperature);
+	kernel_max.setArg(1, buffer_result);
 
-	queue.enqueueNDRangeKernel(kernel_equal, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
+	queue.enqueueNDRangeKernel(kernel_max, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 	
 	//Copy the result from device to host
-	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result[0]);
+	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
+	max = result_max[0];
 
+	//Find position of max ! MUST MAKE ASYNC
+	for (int i = 0; i < temperature.size(); i++) {
+		if (max == temperature.at(i)) {
+			index_max = i;
+		}
+	}
+
+	/* - Min -*/
+
+	//Copy arrays to device memory
+	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
+	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_min[0]);
+
+	//Setup and execute the kernel
+	cl::Kernel kernel_min = cl::Kernel(program, "reduce_min");
+	kernel_min.setArg(0, buffer_temperature);
+	kernel_min.setArg(1, buffer_result);
+
+	queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
+
+	//Copy the result from device to host
+	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_min[0]);
+	min = result_min[0];
+
+	//Find position of min ! MUST MAKE ASYNC
+	for (int i = 0; i < temperature.size(); i++) {
+		if (min == temperature.at(i)) {
+			index_min = i;
+		}
+	}
+
+
+	//Output result
+	std::cout << "\n-----------------------------------\n" << std::endl;
+	std::cout << "Max: " << max << "  at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << std::endl;
+	std::cout << "Min: " << min << "  at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
+	std::cout << "Mean: " << mean << std::endl;
+
+
+	system("pause");
 	return 0;
 }
