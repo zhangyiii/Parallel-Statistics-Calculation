@@ -1,8 +1,10 @@
-﻿Build started 22/03/2016 23:10:09.
+﻿Build started 23/03/2016 17:21:39.
      1>Project "C:\Users\Computing\Documents\GitHub\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\Tutorial 1.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
          C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\x86_amd64\CL.exe /c /I"C:\Program Files (x86)\Intel\OpenCL SDK\5.3\include" /Zi /nologo /W3 /WX- /Od /D __x86_64 /D _DEBUG /D _CONSOLE /D _UNICODE /D UNICODE /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /Fo"x64\Debug\\" /Fd"x64\Debug\vc140.pdb" /Gd /TP /errorReport:prompt source.cpp
          source.cpp
+     1>source.cpp(23): warning C4101: 'mean': unreferenced local variable
+     1>c:\users\computing\documents\github\parallel-statistics-calculation\parallel-statistics-calculation\parallel-statistics-calculation\source.cpp(205): warning C4715: 'findIndex': not all control paths return a value
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\x86_amd64\link.exe /ERRORREPORT:PROMPT /OUT:"C:\Users\Computing\Documents\GitHub\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\x64\Debug\Parallel-Statistics-Calculation.exe" /INCREMENTAL /NOLOGO /LIBPATH:"C:\Program Files (x86)\Intel\OpenCL SDK\5.3\lib\x64" OpenCL.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /Debug /PDB:"C:\Users\Computing\Documents\GitHub\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\x64\Debug\Parallel-Statistics-Calculation.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"C:\Users\Computing\Documents\GitHub\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\x64\Debug\Parallel-Statistics-Calculation.lib" /MACHINE:X64 x64\Debug\source.obj
          Tutorial 1.vcxproj -> C:\Users\Computing\Documents\GitHub\Parallel-Statistics-Calculation\Parallel-Statistics-Calculation\x64\Debug\Parallel-Statistics-Calculation.exe
@@ -15,4 +17,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:01.17
+Time Elapsed 00:00:02.15

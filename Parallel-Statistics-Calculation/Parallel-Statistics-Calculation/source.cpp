@@ -5,9 +5,11 @@
 #include <vector>
 #include <string>
 #include "Utils.h"
-
+#include <future>
 #include <CL/cl.hpp>
 
+//Function prototypes
+int findIndex(int value, vector<int> &temp);
 
 int main()
 {//Program entry point
@@ -18,7 +20,9 @@ int main()
 	int device_id = 0;
 
 	//Result variables
-	double min = 0, max = 0, mean = 0;
+	double mean;
+	int min = 0, max = 0;
+	future<int> fumax, fumin, fumean;
 	int index_min = 0, index_max = 0, index_mean = 0;
 
 	//Vectors to hold data from all weather stations
@@ -27,7 +31,7 @@ int main()
 	vector<int>month;
 	vector<int>day;
 	vector<int>time;
-	vector<double>temperature;
+	vector<int>temperature;
 
 	std::cout << "Enter relative filepath: ";
 	std::cin >> filename;
@@ -67,7 +71,7 @@ int main()
 			count++;
 			break;
 		case 5:
-			temperature.push_back(stod(data));
+			temperature.push_back(stoi(data));
 			count = 0;
 			break;
 		}
@@ -76,7 +80,7 @@ int main()
 	
 	/* Data is now all read in and stored into vectors. Calculations can now be performed */
 
-	//Select /  Output computing devices and initiate command queue 
+	//Select / Output computing devices and initiate command queue 
 	cl::Context context = GetContext(platform_id, device_id);
 	std::cout << "Runinng on " << GetPlatformName(platform_id) << ", " << GetDeviceName(platform_id, device_id) << std::endl;
 	cl::CommandQueue queue(context);
@@ -97,13 +101,13 @@ int main()
 		throw err;
 	}
 
-	size_t vector_elements = temperature.size();//number of elements
-	size_t vector_size = temperature.size()*sizeof(double);//size in bytes
+	size_t vector_elements = temperature.size();
+	size_t vector_size = temperature.size()*sizeof(int);
 
     //Output vector
-	std::vector<double> result_min(vector_elements);
-	std::vector<double> result_max(vector_elements);
-	std::vector<double> result_mean(vector_elements);
+	std::vector<int> result_min(vector_elements);
+	std::vector<int> result_max(vector_elements);
+	std::vector<int> result_mean(vector_elements);
 
 	//Device buffers
 	cl::Buffer buffer_temperature(context, CL_MEM_READ_WRITE, vector_size);
@@ -119,6 +123,7 @@ int main()
 	cl::Kernel kernel_max = cl::Kernel(program, "reduce_max");
 	kernel_max.setArg(0, buffer_temperature);
 	kernel_max.setArg(1, buffer_result);
+	kernel_max.setArg(2, cl::Local(5*sizeof(int)));
 
 	queue.enqueueNDRangeKernel(kernel_max, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 	
@@ -126,23 +131,17 @@ int main()
 	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
 	max = result_max[0];
 
-	//Find position of max ! MUST MAKE ASYNC
-	for (int i = 0; i < temperature.size(); i++) {
-		if (max == temperature.at(i)) {
-			index_max = i;
-		}
-	}
-
 	/* - Min -*/
 
 	//Copy arrays to device memory
 	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
-	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_min[0]);
+	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
 
 	//Setup and execute the kernel
 	cl::Kernel kernel_min = cl::Kernel(program, "reduce_min");
 	kernel_min.setArg(0, buffer_temperature);
 	kernel_min.setArg(1, buffer_result);
+	kernel_min.setArg(2, cl::Local(5 * sizeof(int)));
 
 	queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 
@@ -150,21 +149,57 @@ int main()
 	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_min[0]);
 	min = result_min[0];
 
-	//Find position of min ! MUST MAKE ASYNC
-	for (int i = 0; i < temperature.size(); i++) {
-		if (min == temperature.at(i)) {
-			index_min = i;
-		}
-	}
+	/* - Mean -*/
 
+	//Copy arrays to device memory
+	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
+	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
+
+	//Setup and execute the kernel
+	cl::Kernel kernel_mean = cl::Kernel(program, "reduce_avg");
+	kernel_mean.setArg(0, buffer_temperature);
+	kernel_mean.setArg(1, buffer_result);
+	kernel_mean.setArg(2, cl::Local(5 * sizeof(int)));
+
+	queue.enqueueNDRangeKernel(kernel_mean, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
+
+	//Copy the result from device to host
+	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_mean[0]);
+	min = result_mean[0];
+
+
+
+
+
+
+
+
+
+	/* Find index's */
+
+	//Start functions
+	fumax = std::async(findIndex, max, temperature);
+	fumin = std::async(findIndex, min, temperature);
+
+	//Wait for async functions to return
+	index_max = fumax.get();
+	index_min = fumin.get();
 
 	//Output result
 	std::cout << "\n-----------------------------------\n" << std::endl;
-	std::cout << "Max: " << max << "  at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << std::endl;
-	std::cout << "Min: " << min << "  at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
-	std::cout << "Mean: " << mean << std::endl;
+	std::cout << "Max: " << max << " first occured at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << std::endl;
+	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
+	//std::cout << "Mean: " << mean << std::endl;
 
 
 	system("pause");
 	return 0;
+}
+
+int findIndex(int value, vector<int> &temp)
+{//Find index position of value in vector
+	for (int i = 0; i < temp.size(); i++) {
+		if (value = temp.at(i)) 
+			return i;
+	}
 }
