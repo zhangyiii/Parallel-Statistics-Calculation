@@ -1,49 +1,77 @@
-__kernel void add(__global const int* A, __global const int* B, __global int* C) {
-	int id = get_global_id(0);
-	C[id] = A[id] + B[id];
+__kernel void reduce_min(__global const int* A, __global int* B, __local int* scratch) {
+    //Get local variable data
+    int id = get_global_id(0);
+    int lid = get_local_id(0);
+    int N = get_local_size(0);
+
+    //Store valus of global memory into local memory
+    scratch[lid] = A[id];
+
+    //Wait for copying to complete
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    for (int i = 1; i < N; i *= 2) {
+        if (!(lid % (i * 2)) && ((lid + i) < N)){
+            if (scratch[lid] > scratch[lid + i])
+                scratch[lid] = scratch[lid+i];
+        }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    //Store cache in output array
+    if (!lid)
+        atomic_min(&B[0], scratch[lid]);
 }
 
-__kernel void equal(__global const float* A, __global float* B) {
-	int id = get_global_id(0);
-	B[id] = A[id];
+
+__kernel void reduce_max(__global const int* A, __global int* B, __local int* scratch) {
+    //Get local variable data
+    int id = get_global_id(0);
+    int lid = get_local_id(0);
+    int N = get_local_size(0);
+
+    //Store valus of global memory into local memory
+    scratch[lid] = A[id];
+
+    //Wait for copying to complete
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    for (int i = 1; i < N; i *= 2) {
+        if (!(lid % (i * 2)) && ((lid + i) < N)){
+            if (scratch[lid] < scratch[lid + i])
+                scratch[lid] = scratch[lid+i];
+        }
+
+        barrier(CLK_LOCAL_MEM_FENCE);
+    }
+
+    //Store cache in output array
+    if (!lid)
+        atomic_max(&B[0], scratch[lid]);
 }
 
-__kernel void reduce_min(__global const double* A, __global double* B) {
-	int id = get_global_id(0);
-	int N = get_global_size(0);
-	
-	B[id] = A[id];
+__kernel void reduce_avg(__global const int* A, __global int* B, __local int* scratch) {
+  //Get local variable data
+  int id = get_global_id(0);
+	int lid = get_local_id(0);
+	int N = get_local_size(0);
 
-	barrier(CLK_GLOBAL_MEM_FENCE);
+	//Store valus of global memory into local memory
+	scratch[lid] = A[id];
 
-	for (int i = 1; i < N; i *= 2) { //i is a stride
-		if (!(id % (i * 2)) && ((id + i) < N))
+  //Wait for copying to complete
+	barrier(CLK_LOCAL_MEM_FENCE);
+
+	for (int i = 1; i < N; i *= 2) {
+		if (!(lid % (i * 2)) && ((lid + i) < N))
 		{
-			if(B[id] > B[id + i])
-			{
-				B[id] = B[id + i];
-			}
+				scratch[lid] += scratch[lid+i];
 		}
-		barrier(CLK_GLOBAL_MEM_FENCE);
+		barrier(CLK_LOCAL_MEM_FENCE);
 	}
-}
 
-__kernel void reduce_max(__global const double* A, __global double* B) {
-	int id = get_global_id(0);
-	int N = get_global_size(0);
-	
-	B[id] = A[id];
-
-	barrier(CLK_GLOBAL_MEM_FENCE);
-
-	for (int i = 1; i < N; i *= 2) { //i is a stride
-		if (!(id % (i * 2)) && ((id + i) < N))
-		{
-			if(B[id] < B[id + i])
-			{
-				B[id] = B[id + i];
-			}
-		}
-		barrier(CLK_GLOBAL_MEM_FENCE);
-	}
+	//Store cache in output array
+	if (!lid)
+		atomic_add(&B[0],scratch[lid]);
 }

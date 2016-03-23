@@ -10,16 +10,21 @@
 
 //Function prototypes
 int findIndex(int value, vector<int> &temp);
+int getYear();
 
 int main()
 {//Program entry point
 	ifstream dataFile;
-	string data, filename, options;
+	string filename, options;
 	int count = 0;
 	int platform_id = 0;
 	int device_id = 0;
 	int block_size = 1000;
 	bool options_used = false;
+	string option_type;
+
+	//File read data
+	string data_station, data_year, data_month, data_day, data_time, data_temp;
 
 	//Result variables
 	double mean;
@@ -43,30 +48,21 @@ int main()
 	if (!(filename.find("short") != std::string::npos)) {
 
 		//Ask for user input
-		std::cout << "Options?: ";
+		std::cout << "Options? Enter a location, type 'year' or type 'none' for all: ";
 		std::cin >> options;
 		
 		//Check for location options
 		if (options == "BARKSTON_HEATH" || options == "SCAMPTON" || options == "WADDINGTON" || options == "CRANWELL" || options == "CONINGSBY") {
 			options_used = true;
-
+			option_type = "LOCATION";
 		}
-		//Check for time options
-		else {
-			int year;
-
-			try {
-				year = stoi(options);
-
-				//Check year entered is whithen range
-				if (year <= 2016 || year >= 1943) {
-					options_used = true;
-
-				}
-			}
-			catch(...){
-				//Catch invalid argument error
-			}
+		//Check for year options
+		else if (options == "year" || options == "YEAR") {
+			//Get valid year using getYear()
+			std::cout << "Enter year: ";
+			options = to_string(getYear());
+			options_used = true;
+			option_type = "YEAR";
 		}
 	}
 
@@ -78,42 +74,56 @@ int main()
 		exit(0);
 	}
 
-	//Read in all data without options
+	//Check if options for year are input
+	if (options_used && option_type == "YEAR") {
+		std::cout << "Reading in data...\n";
+		while (dataFile >> data_station >> data_year >> data_month >> data_day >> data_time >> data_temp) {
+			if (data_year == options) {
 
-	if (!options_used) {
-		std::cout << "Reading in data..." << std::endl;
-		while (dataFile >> data) {
-
-			//Append data to the relavent vector
-			switch (count) {
-			case 0:
-				stationName.push_back(data);
-				count++;
-				break;
-			case 1:
-				year.push_back(stoi(data));
-				count++;
-				break;
-			case 2:
-				month.push_back(stoi(data));
-				count++;
-				break;
-			case 3:
-				day.push_back(stoi(data));
-				count++;
-				break;
-			case 4:
-				time.push_back(stoi(data));
-				count++;
-				break;
-			case 5:
-				temperature.push_back(stoi(data));
-				count = 0;
-				break;
+				//Read in all data of that year
+				stationName.push_back(data_station);
+				year.push_back(stoi(data_year));
+				month.push_back(stoi(data_month));
+				day.push_back(stoi(data_day));
+				time.push_back(stoi(data_time));
+				temperature.push_back(stoi(data_temp));
 			}
-
-		} dataFile.close();
+		}
 	}
+	//Check if options for locations are input
+	else if (options_used && option_type == "LOCATION") {
+		std::cout << "Reading in data...\n";
+		while (dataFile >> data_station >> data_year >> data_month >> data_day >> data_time >> data_temp) {
+			if (data_station == options) {
+
+				//Read in all data of that station
+				stationName.push_back(data_station);
+				year.push_back(stoi(data_year));
+				month.push_back(stoi(data_month));
+				day.push_back(stoi(data_day));
+				time.push_back(stoi(data_time));
+				temperature.push_back(stoi(data_temp));
+			}
+		}
+	}
+	else {
+		std::cout << "No valid option selected. All data will be run." << std::endl;
+		std::cout << "Reading in data...\n";
+		while (dataFile >> data_station >> data_year >> data_month >> data_day >> data_time >> data_temp) {
+
+			//Read in all data regardless of options
+			stationName.push_back(data_station);
+			year.push_back(stoi(data_year));
+			month.push_back(stoi(data_month));
+			day.push_back(stoi(data_day));
+			time.push_back(stoi(data_time));
+			temperature.push_back(stoi(data_temp));
+		}
+	}
+
+	//End filestream
+	dataFile.close();
+	
 
 	//Check data was read in ok
 	if(temperature.size() < 10){
@@ -228,8 +238,25 @@ int main()
 	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
 	std::cout << "Mean: " << mean << std::endl;
 
+	std::cout << "\n\nDeveloped by Michael Hancock\nHAN11327452\n\nRun again? (Y/N): ";
+	cin >> options;
 
-	system("pause");
+	//Check if should run again
+	if (options == "Y" || options == "y" || options == "yes") {
+
+		//Deallocate vector memory
+		stationName.clear();
+		year.clear();
+		month.clear();
+		day.clear();
+		time.clear();
+		temperature.clear();
+
+		//Rerun program
+		system("cls");
+		main();
+	}
+
 	return 0;
 }
 
@@ -239,4 +266,15 @@ int findIndex(int value, vector<int> &temp)
 		if (value == temp.at(i)) 
 			return i;
 	}
+}
+
+int getYear() 
+{//Get valid input year from user
+	int input = 0;
+	
+	while (!(cin >> input) || input > 2016 || input < 1945) {
+		cin.clear();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
+		cout << "Invalid input. Try again: ";
+	} return input;
 }
