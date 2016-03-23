@@ -14,10 +14,12 @@ int findIndex(int value, vector<int> &temp);
 int main()
 {//Program entry point
 	ifstream dataFile;
-	string data, filename;
+	string data, filename, options;
 	int count = 0;
 	int platform_id = 0;
 	int device_id = 0;
+	int block_size = 1000;
+	bool options_used = false;
 
 	//Result variables
 	double mean;
@@ -33,8 +35,40 @@ int main()
 	vector<int>time;
 	vector<int>temperature;
 
+	//Ask for user input
 	std::cout << "Enter relative filepath: ";
 	std::cin >> filename;
+
+	//Get additional options for longer data set
+	if (!(filename.find("short") != std::string::npos)) {
+
+		//Ask for user input
+		std::cout << "Options?: ";
+		std::cin >> options;
+		
+		//Check for location options
+		if (options == "BARKSTON_HEATH" || options == "SCAMPTON" || options == "WADDINGTON" || options == "CRANWELL" || options == "CONINGSBY") {
+			options_used = true;
+
+		}
+		//Check for time options
+		else {
+			int year;
+
+			try {
+				year = stoi(options);
+
+				//Check year entered is whithen range
+				if (year <= 2016 || year >= 1943) {
+					options_used = true;
+
+				}
+			}
+			catch(...){
+				//Catch invalid argument error
+			}
+		}
+	}
 
 	//Open file and check for failure file
 	dataFile.open(filename, std::ofstream::out | std::ofstream::app);
@@ -44,39 +78,49 @@ int main()
 		exit(0);
 	}
 
-	//Read in all data
-	std::cout << "Reading in data..." << std::endl;
-	while (dataFile >> data) {
+	//Read in all data without options
 
-		//Append data to the relavent vector
-		switch (count) {
-		case 0:
-			stationName.push_back(data);
-			count++;
-			break;
-		case 1:
-			year.push_back(stoi(data));
-			count++;
-			break;
-		case 2:
-			month.push_back(stoi(data));
-			count++;
-			break;
-		case 3:
-			day.push_back(stoi(data));
-			count++;
-			break;
-		case 4:
-			time.push_back(stoi(data));
-			count++;
-			break;
-		case 5:
-			temperature.push_back(stoi(data));
-			count = 0;
-			break;
-		}
+	if (!options_used) {
+		std::cout << "Reading in data..." << std::endl;
+		while (dataFile >> data) {
 
-	} dataFile.close();
+			//Append data to the relavent vector
+			switch (count) {
+			case 0:
+				stationName.push_back(data);
+				count++;
+				break;
+			case 1:
+				year.push_back(stoi(data));
+				count++;
+				break;
+			case 2:
+				month.push_back(stoi(data));
+				count++;
+				break;
+			case 3:
+				day.push_back(stoi(data));
+				count++;
+				break;
+			case 4:
+				time.push_back(stoi(data));
+				count++;
+				break;
+			case 5:
+				temperature.push_back(stoi(data));
+				count = 0;
+				break;
+			}
+
+		} dataFile.close();
+	}
+
+	//Check data was read in ok
+	if(temperature.size() < 10){
+		std::cout << "Data read error... Program will now close." << endl;
+		system("pause");
+		exit(0);
+	}
 	
 	/* Data is now all read in and stored into vectors. Calculations can now be performed */
 
@@ -123,7 +167,7 @@ int main()
 	cl::Kernel kernel_max = cl::Kernel(program, "reduce_max");
 	kernel_max.setArg(0, buffer_temperature);
 	kernel_max.setArg(1, buffer_result);
-	kernel_max.setArg(2, cl::Local(5*sizeof(int)));
+	kernel_max.setArg(2, cl::Local(block_size * sizeof(int)));
 
 	queue.enqueueNDRangeKernel(kernel_max, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 	
@@ -141,7 +185,7 @@ int main()
 	cl::Kernel kernel_min = cl::Kernel(program, "reduce_min");
 	kernel_min.setArg(0, buffer_temperature);
 	kernel_min.setArg(1, buffer_result);
-	kernel_min.setArg(2, cl::Local(5 * sizeof(int)));
+	kernel_min.setArg(2, cl::Local(block_size * sizeof(int)));
 
 	queue.enqueueNDRangeKernel(kernel_min, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 
@@ -159,21 +203,14 @@ int main()
 	cl::Kernel kernel_mean = cl::Kernel(program, "reduce_avg");
 	kernel_mean.setArg(0, buffer_temperature);
 	kernel_mean.setArg(1, buffer_result);
-	kernel_mean.setArg(2, cl::Local(5 * sizeof(int)));
+	kernel_mean.setArg(2, cl::Local(block_size * sizeof(int)));
 
 	queue.enqueueNDRangeKernel(kernel_mean, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 
 	//Copy the result from device to host
 	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_mean[0]);
-	min = result_mean[0];
-
-
-
-
-
-
-
-
+	mean = result_mean[0];
+	mean /= temperature.size();
 
 	/* Find index's */
 
@@ -189,7 +226,7 @@ int main()
 	std::cout << "\n-----------------------------------\n" << std::endl;
 	std::cout << "Max: " << max << " first occured at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << std::endl;
 	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
-	//std::cout << "Mean: " << mean << std::endl;
+	std::cout << "Mean: " << mean << std::endl;
 
 
 	system("pause");
@@ -199,7 +236,7 @@ int main()
 int findIndex(int value, vector<int> &temp)
 {//Find index position of value in vector
 	for (int i = 0; i < temp.size(); i++) {
-		if (value = temp.at(i)) 
+		if (value == temp.at(i)) 
 			return i;
 	}
 }
