@@ -10,16 +10,13 @@
 
 //Function prototypes
 int findIndex(int value, vector<int> &temp);
-int getYear();
+int getYear(), getBins();
 
 int main()
 {//Program entry point
 	ifstream dataFile;
 	string filename, options;
-	int count = 0;
-	int platform_id = 0;
-	int device_id = 0;
-	int block_size = 1000;
+	int count = 0, platform_id = 0, device_id = 0,  block_size = 1000;
 	bool options_used = false;
 	string option_type;
 
@@ -48,7 +45,7 @@ int main()
 	if (!(filename.find("short") != std::string::npos)) {
 
 		//Ask for user input
-		std::cout << "Options? Enter a location, type 'year' or type 'none' for all: ";
+		std::cout << "Options? Enter a location, type 'year', type 'month' or type 'none' for all: ";
 		std::cin >> options;
 		
 		//Check for location options
@@ -63,6 +60,30 @@ int main()
 			options = to_string(getYear());
 			options_used = true;
 			option_type = "YEAR";
+		}
+		//Check for year options
+		else if (options == "month" || options == "MONTH") {
+			//Get valid year using getYear()
+			std::cout << "Enter month: ";
+			std::cin >> options;
+
+			//Check month is valid
+			string months[12] = { "JANUARY", "FEBUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" };
+			std::transform(options.begin(), options.end(), options.begin(), toupper);
+			for (int i = 0; i < 12; i++) {
+				if (options == months[i])
+					//Valid month found
+					if (i + 1 >= 10) {
+						options = to_string(i + 1);
+						options_used = true;
+						option_type = "MONTH";
+					}
+					else {
+						options = "0" + to_string(i + 1);
+						options_used = true;
+						option_type = "MONTH";
+					}
+			}
 		}
 	}
 
@@ -106,6 +127,22 @@ int main()
 			}
 		}
 	}
+	//Check if options for month are input
+	else if (options_used && option_type == "MONTH") {
+		std::cout << "Reading in data...\n";
+		while (dataFile >> data_station >> data_year >> data_month >> data_day >> data_time >> data_temp) {
+			if (data_month == options) {
+
+				//Read in all data of that month
+				stationName.push_back(data_station);
+				year.push_back(stoi(data_year));
+				month.push_back(stoi(data_month));
+				day.push_back(stoi(data_day));
+				time.push_back(stoi(data_time));
+				temperature.push_back(stoi(data_temp));
+			}
+		}
+	}
 	else {
 		std::cout << "No valid option selected. All data will be run." << std::endl;
 		std::cout << "Reading in data...\n";
@@ -132,7 +169,7 @@ int main()
 		exit(0);
 	}
 	
-	/* Data is now all read in and stored into vectors. Calculations can now be performed */
+	/* - Data is now all read in and stored into vectors. Calculations can now be performed - */
 
 	//Select / Output computing devices and initiate command queue 
 	cl::Context context = GetContext(platform_id, device_id);
@@ -161,13 +198,14 @@ int main()
     //Output vector
 	std::vector<int> result_min(vector_elements);
 	std::vector<int> result_max(vector_elements);
-	std::vector<int> result_mean(vector_elements);
+	std::vector<int> result_sum(vector_elements);
+	std::vector<int> hist(vector_elements);
 
 	//Device buffers
 	cl::Buffer buffer_temperature(context, CL_MEM_READ_WRITE, vector_size);
 	cl::Buffer buffer_result(context, CL_MEM_READ_WRITE, vector_size);
 
-	/* - Max -*/
+	/* - Max - */
 
 	//Copy arrays to device memory
 	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
@@ -185,7 +223,7 @@ int main()
 	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
 	max = result_max[0];
 
-	/* - Min -*/
+	/* - Min - */
 
 	//Copy arrays to device memory
 	queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
@@ -210,19 +248,19 @@ int main()
 	queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_max[0]);
 
 	//Setup and execute the kernel
-	cl::Kernel kernel_mean = cl::Kernel(program, "reduce_avg");
-	kernel_mean.setArg(0, buffer_temperature);
-	kernel_mean.setArg(1, buffer_result);
-	kernel_mean.setArg(2, cl::Local(block_size * sizeof(int)));
+	cl::Kernel kernel_sum = cl::Kernel(program, "reduce_sum");
+	kernel_sum.setArg(0, buffer_temperature);
+	kernel_sum.setArg(1, buffer_result);
+	kernel_sum.setArg(2, cl::Local(block_size * sizeof(int)));
 
-	queue.enqueueNDRangeKernel(kernel_mean, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
+	queue.enqueueNDRangeKernel(kernel_sum, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
 
 	//Copy the result from device to host
-	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_mean[0]);
-	mean = result_mean[0];
+	queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &result_sum[0]);
+	mean = result_sum[0];
 	mean /= temperature.size();
 
-	/* Find index's */
+	/* - Find index's - */
 
 	//Start functions
 	fumax = std::async(findIndex, max, temperature);
@@ -234,15 +272,42 @@ int main()
 
 	//Output result
 	std::cout << "\n-----------------------------------\n" << std::endl;
-	std::cout << "Max: " << max << " first occured at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << std::endl;
-	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << std::endl;
+	std::cout << "Max:  " << max << " first occured at - " << stationName.at(index_max) << " on " << day.at(index_max) << " / " << month.at(index_max) << " / " << year.at(index_max) << "\t| " << time.at(index_max) << "hrs" << std::endl;
+	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << "\t| " << time.at(index_min) << "hrs" << std::endl;
 	std::cout << "Mean: " << mean << std::endl;
 
+	/* Hist */
+
+	std::cout << "\n-----------------------------------\n" << std::endl;
+	std::cout << "Calculate histogram? (Y/N): ";
+	std::cin >> options;
+
+	//Check if should run histogram
+	if (options == "Y" || options == "y" || options == "yes" || options == "YES") {
+		//Copy arrays to device memory
+		queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
+		queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &hist[0]);
+
+		//Setup and execute the kernel
+		cl::Kernel kernel_hist = cl::Kernel(program, "hist");
+		kernel_hist.setArg(0, buffer_temperature);
+		kernel_hist.setArg(1, buffer_result);
+		kernel_hist.setArg(2, 100);
+		kernel_hist.setArg(3, 10);
+
+		queue.enqueueNDRangeKernel(kernel_hist, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
+
+		//Copy the result from device to host and output
+		queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &hist[0]);
+		std::cout << hist << endl;
+	}
+
+	std::cout << "\n-----------------------------------\n" << std::endl;
 	std::cout << "\n\nDeveloped by Michael Hancock\nHAN11327452\n\nRun again? (Y/N): ";
 	cin >> options;
 
 	//Check if should run again
-	if (options == "Y" || options == "y" || options == "yes") {
+	if (options == "Y" || options == "y" || options == "yes" || options == "YES") {
 
 		//Deallocate vector memory
 		stationName.clear();
@@ -278,3 +343,16 @@ int getYear()
 		cout << "Invalid input. Try again: ";
 	} return input;
 }
+
+int getBins() 
+{//Get valid input bins from user
+	int input = 0;
+
+	while (!(cin >> input) || (input % 2 != 0) || input < 2) {
+		cin.clear();
+		cin.ignore(numeric_limits<streamsize>::max(), '\n');
+		cout << "Invalid input. Try again: ";
+	} return input;
+}
+
+/* Developed by Michael Hancock HAN11327452 at the University of Lincoln */
