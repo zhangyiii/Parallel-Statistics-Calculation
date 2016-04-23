@@ -75,14 +75,3 @@ __kernel void reduce_sum(__global const int* in, __global int* out, __local int*
 	if (!lid)
 		atomic_add(&out[0], cache[lid]);
 }
-
-__kernel void hist(__global const int* in, __global int* out,  int nr_bins, int initial) {			
-	//Get local variable data
-	int id = get_global_id(0);
-
-	//Where out is init to 0
-	int bin_index = in[id+initial];//take value as a bin index
-
-	if(bin_index < nr_bins)
-		atomic_inc(&out[bin_index]);
-}
