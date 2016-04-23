@@ -276,32 +276,6 @@ int main()
 	std::cout << "Min: " << min << " first occured at - " << stationName.at(index_min) << " on " << day.at(index_min) << " / " << month.at(index_min) << " / " << year.at(index_min) << "\t| " << time.at(index_min) << "hrs" << std::endl;
 	std::cout << "Mean: " << mean << std::endl;
 
-	/* Hist */
-
-	std::cout << "\n-----------------------------------\n" << std::endl;
-	std::cout << "Calculate histogram? (Y/N): ";
-	std::cin >> options;
-
-	//Check if should run histogram
-	if (options == "Y" || options == "y" || options == "yes" || options == "YES") {
-		//Copy arrays to device memory
-		queue.enqueueWriteBuffer(buffer_temperature, CL_TRUE, 0, vector_size, &temperature[0]);
-		queue.enqueueWriteBuffer(buffer_result, CL_TRUE, 0, vector_size, &hist[0]);
-
-		//Setup and execute the kernel
-		cl::Kernel kernel_hist = cl::Kernel(program, "hist");
-		kernel_hist.setArg(0, buffer_temperature);
-		kernel_hist.setArg(1, buffer_result);
-		kernel_hist.setArg(2, 100);
-		kernel_hist.setArg(3, 10);
-
-		queue.enqueueNDRangeKernel(kernel_hist, cl::NullRange, cl::NDRange(vector_elements), cl::NullRange);
-
-		//Copy the result from device to host and output
-		queue.enqueueReadBuffer(buffer_result, CL_TRUE, 0, vector_size, &hist[0]);
-		std::cout << hist << endl;
-	}
-
 	std::cout << "\n-----------------------------------\n" << std::endl;
 	std::cout << "\n\nDeveloped by Michael Hancock\nHAN11327452\n\nRun again? (Y/N): ";
 	cin >> options;
